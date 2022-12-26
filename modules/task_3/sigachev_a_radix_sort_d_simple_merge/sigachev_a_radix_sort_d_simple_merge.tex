@@ -1,0 +1,703 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage{graphicx}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{color}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  language=Java,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+
+\title{}
+\author{}
+\date{}
+\begin{document}
+
+\begin{titlepage}
+    \newpage
+    \begin{center}
+    {\bfseries МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ
+Федеральное государственное автономное образовательное учреждение
+высшего образования
+ \\
+    «Национальный исследовательский
+Нижегородский государственный университет им. Н.И. Лобачевского»
+(ННГУ)
+}
+
+    %\begin{center}
+     Институт информационных технологий, математики и механики \\
+    \end{center}
+
+    \vspace{1.2em}
+
+    \begin{center}
+    %\textsc{\textbf{}}
+    \Large отчет \linebreak по дисциплине «Параллельное программирование» \linebreak на тему: \linebreak
+«РЕАЛИЗАЦИЯ АЛГОРИТМА ПОРАЗРЯДНОЙ СОРТИРОВКИ С ПРОСТЫМ СЛИЯНИЕМ ТИПА DOUBLE»
+
+    \end{center}
+
+    \vspace{5em}
+
+
+    \begin{flushright}
+                       Выполнил(а):
+                       студент группы 382008-2\linebreakСигачёв А.В.\underline{\hspace{3cm}} \linebreak\linebreakПроверил: младший научный сотрудник\linebreakНестеров А.Ю.\underline{\hspace{3cm}} 
+    \end{flushright}
+
+
+    \vspace{\fill}
+
+    \begin{center}
+    Нижний Новгород 2022
+    \end{center}
+
+    \end{titlepage}
+    
+\maketitle
+
+\part*{Введение}
+\paragraph{}Message Passing Interface (MPI, интерфейс передачи сообщений) — программный интерфейс (API) для передачи информации, который позволяет обмениваться сообщениями между процессами, выполняющими одну задачу. MPI является наиболее распространённым стандартом интерфейса обмена данными в параллельном программировании. Основным средством коммуникации между процессами в MPI является передача сообщений друг другу. В этой работе используется реализация MPI для языка программирования C++.
+
+\part*{Постановка задачи}
+\paragraph{}Необходимо реализовать алгоритм поразрядной сортировки с простым слиянием на языке C++, используя MPI. Данные для сортировки хранятся в одномерном массиве. Результатом работы является программа, которая должна корректно параллельно выполняться на нескольких процессах, а также набор тестов (не менее трех), проверяющих работу этой программы. В процессе выполнения лабораторной работы требуется использовать систему контроля версий [Git][git] и фрэймворк для разработки автоматических тестов [Google Test][gtest].
+\paragraph{}Выполнение работы предполагает решение следующих задач:
+\begin{enumerate}
+\item реализация алгоритма сортировки, который будут выполнять процессы;
+\item реализация алгоритма планирования для распределения данных между процессами;
+\item разработка тестов для проверки работоспособности алгоритма;
+\item грамотная работа с системой контроля версий, выполненная по инструкции из репозитория.
+\end{enumerate}
+\paragraph{}В завершении работы должны быть приведены 4 файла(CMakeLists.txt, main.cpp, radix\_sort\_d\_simple\_merge.h и radix\_sort\_d\_simple\_merge.cpp)
+
+\part*{Описание алгоритма}
+\paragraph{}Алгоритм работы программы:
+\begin{enumerate} 
+\item Формирование данных для сортировки.
+\item Распределение данных между всеми процессами (для этого - реализовать алгоритм планирования).
+\item Работа каждого отдельного процесса:
+\begin{enumerate}
+    \item сортировка данных алгоритмом поразрядной сортировки, полученных при распределении между процессами;
+    \item отправка данных процессу, который занимается приёмом и последующим слиянием данных.
+\end{enumerate}
+\item Выполнение сортировки данных на одном процессе.
+\item Сравнение результатов работы параллельной сортировки данных с результатом работы последовательной сортировки.
+\end{enumerate} 
+\paragraph{}Алгоритм планирования занимается подсчётом размера данных (количество элементов массива), которые достаются каждому отдельному процессу. Пусть имеется n элементов и m процессов, среди которых нужно распределить эти элементы, а количество этих элементов будет записываться в одномерный массив с названием elements\_per\_proc размером m, каждый номер ячейки которого совпадает с номером процесса. Алгоритм на псевдокоде:
+\begin{lstlisting}
+remained_elements = n mod m;
+цикл от proc_number := 0 до m [шаг 1]
+   elements_per_proc[proc_number] := n div m;
+   если (remained_elements > 0) 
+то
+elements_per_proc[proc_number] := elements_per_proc[proc_number] + 1;
+remained_elements := remained_elements - 1;
+  всё-если
+всё-цикл
+\end{lstlisting}
+\paragraph{}В результате работы этого алгоритма массив elements\_per\_proc будет содержать количество элементов, которое нужно будет отсортировать процессу с номером таким же, что и номер ячейки этого массива.
+\paragraph{}Алгоритм сортировки следующий: 
+\begin{lstlisting}
+std::vector<double> Not_Parallel_Radix_Sort(const std::vector<double>& vect) {
+    int radixNegativeZero = 0;
+    int maxRadixNegativeZero = RightOfThePoint(vect[0]);
+    for (int i = 1; i < static_cast<int>(vect.size()); ++i) {
+        radixNegativeZero = RightOfThePoint(vect[i]);
+        if (radixNegativeZero > maxRadixNegativeZero) {
+            maxRadixNegativeZero = radixNegativeZero;
+        }
+    }
+    double max = vect[0];
+    for (int i = 1; i < static_cast<int>(vect.size()); i++) {
+        if (vect[i] > max) {
+            max = vect[i];
+        }
+    }
+    int maxRadixPositiveZero = LeftOfThePoint(max);
+    std::vector<double> result(vect);
+    for (int i = -maxRadixNegativeZero; i <= maxRadixPositiveZero; i++) {
+        result = RadixSort(result, i);
+    }
+    return result;
+}
+\end{lstlisting}
+\paragraph{}Алгоритм Слияния:: 
+\begin{lstlisting}
+std::vector<double> Merge(const std::vector<double>& vec_left,
+    const std::vector<double>& vec_right) {
+    std::vector<double> result((vec_left.size() + vec_right.size()));
+
+    int i = 0, j = 0, k = 0;
+    while (i < static_cast<int>(vec_left.size())
+        && j < static_cast<int>(vec_right.size())) {
+        if (vec_left[i] < vec_right[j])
+            result[k] = vec_left[i++];
+        else
+            result[k] = vec_right[j++];
+        k++;
+    }
+    while (i < static_cast<int>(vec_left.size())) {
+        result[k++] = vec_left[i++];
+    }
+    while (j < static_cast<int>(vec_right.size())) {
+        result[k++] = vec_right[j++];
+    }
+    return result;
+}
+\end{lstlisting}
+
+\part*{Описание распараллеливания}
+\paragraph{}Здесь описана схема работы метода Parallel\_Radix\_Sort, которая принимает на вход данные для сортировки и возвращает их копию, отсортированную в порядке возрастания. Стоит упомянуть, что каждый процесс, кроме процесса с номером 0, возвращает лишь часть данных, которая досталась ему в результате распределения. Процесс с номером 0 возвращает полный объём данных, переданных в функцию (так как именно этот процесс занимается распределением и сбором данных). Следовательно, в вызывающем коде решением задачи будет значение Parallel\_Radix\_Sort который вернётся в результате выполнения этой функции на нулевом процессе.
+\begin{enumerate} 
+\item Шаг 1: Определяется количество процессов и количество отправляемых им данных
+\item Шаг 2: Заполняется массив данных выделяемый каждому процессу
+\item Шаг 3: Данные выдаются процессам
+\item Шаг 4: Каждый процесс сортирует свои данные не параллельным алгоритмом
+\item Шаг 5: Процессы возвращают данные
+\item Шаг 6: 0 Процесс производит слияние и возвращает результат
+\end{enumerate} 
+
+\part*{Описание схемы OpenMPI}
+\paragraph{}Получение количества процессов: int MPI\_Comm\_size(MPI\_Comm comm, int *size), где comm - коммуникатор, size - переменная, куда запишется количество процессов. Я использую глобальный коммуникатор MPI\_COMM\_WORLD.
+\paragraph{}Получение номера процесса: int MPI\_Comm\_rank(MPI\_Comm comm, int *rank), где comm - коммуникатор, rank - переменная, куда запишется номера процесса.
+\paragraph{}Отправка данных с помощью MPI может выполняться функцией MPI\_Scatterv(). Это блокирующая операция отправки данных всем процессам. Описание функции: int MPI\_Scatterv(void* sendbuf, int *sendcounts, int *displs, MPI\_Datatype sendtype, void* recvbuf, int recvcount, MPI\_Datatype recvtype, int root, MPI\_Comm comm), где
+\begin{enumerate} 
+\item sendbuf\\
+адрес начала буфера посылки (используется только в процессе-отправителе root);
+\item sendcounts\\
+целочисленный массив (размер равен числу процессов в группе), содержащий число элементов, посылаемых каждому процессу;
+\item displs\\
+целочисленный массив (размер равен числу процессов в группе), i-ое значение определяет смещение относительно начала sendbuf для данных, посылаемых процессу i;
+\item sendtype\\
+тип посылаемых элементов;
+\item recvbuf\\
+адрес начала буфера приема;
+\item recvcount\\
+число получаемых элементов;
+\item recvtype\\
+тип получаемых элементов;
+\item root\\
+номер процесса-отправителя;
+\item comm\\
+коммуникатор;
+\end{enumerate} 
+\paragraph{}Отправка данных на шаге 3 из нулевого процесса осуществляется следующим вызовом MPI\_Scatterv: MPI\_Scatterv(vec.data(), sendcounts.data(), displs.data(), MPI\_DOUBLE, recvbuf.data(), count, MPI\_DOUBLE, 0, MPI\_COMM\_WORLD), где:
+\begin{enumerate} 
+\item vec.data() – Весь массив
+\item sendcounts.data() – массив распределения
+\item displs.data() – смещение
+\item recvbuf.data() – принимающий буфер
+\item count – размер принимающего буфера
+\item MPI\_COMM\_WORLD - коммуникатор
+\end{enumerate} 
+\paragraph{}Отправка данных на шаге 5 из ненулевого процесса осуществляется с помощью MPI\_Send. 
+Описание функции int MPI\_Send(const void *buf, int count, MPI\_Datatype datatype, int dest, int tag, MPI\_Comm comm), где:
+\begin{enumerate} 
+\item buf	-	адрес начала расположения пересылаемых данных;
+\item count	-	число пересылаемых элементов;
+\item datatype	-	тип посылаемых элементов;
+\item dest	-	номер процесса-получателя в группе, связанной с коммуникатором comm;
+\item tag	-	идентификатор сообщения (аналог типа сообщения функций nread и nwrite PSE nCUBE2);
+\item comm	-	коммуникатор области связи.
+\end{enumerate} 
+\paragraph{}Вызов функуции MPI\_Send(recvbuf.data(), count, MPI\_DOUBLE, 0, 0, MPI\_COMM\_WORLD), где:
+\begin{enumerate} 
+\item recvbuf.data() – исходящие данные
+\item count – колличество данных
+\item 0 – процесс назначения
+\item 0 – идентификатор
+\item MPI\_COMM\_WORLD - коммуникатор
+\item comm	-	коммуникатор области связи.
+\end{enumerate} 
+\paragraph{}Получение данных в MPI осуществляется через функцию MPI\_Recv(). Это блокирующая операция приёма данных от одного процесса. Описание функции: int MPI\_Recv(void *buf, int count, MPI\_Datatype datatype, int source, int tag, MPI\_Comm comm, MPI\_Status *status), где:
+\begin{enumerate} 
+\item buf	-	адрес начала расположения принимаемого сообщения;
+\item count	-	максимальное число принимаемых элементов;
+\item datatype	-	тип элементов принимаемого сообщения;
+\item source	-	номер процесса-отправителя;
+\item tag	-	идентификатор сообщения;
+\item comm	-	коммуникатор области связи;
+\item status	-	атрибуты принятого сообщения.
+\end{enumerate} 
+\paragraph{}Получение данных на шаге 6 в нулевом процессе происходит в цикле для каждого процесса кроме 0: MPI\_Recv(recvbuf.data(), sendcounts[i], MPI\_DOUBLE, i, MPI\_ANY\_TAG, MPI\_COMM\_WORLD, &status);.
+
+\part*{Результаты экспериментов}
+\paragraph{}С помощью MPI\_Wtime() можно засечь время выполнения.
+\paragraph{}Я тестирую работу своей программы на следующих данных: количество процессов меняется от 1 до 4; процессы исполняют одни и те же три теста: сортируют 10, 100, и 1000 элементов. Таблица ниже содержит результаты выполнения этих тестов.
+\begin{center}
+\begin{tabular}{||c c c c c ||} 
+ \hline
+ Кол-во элементов/Кол-во процессов & 1 & 2 & 3 & 4 \\ [0.5ex] 
+ \hline\hline
+ 10 & 0 & 0 & 0 & 0\\ 
+ \hline
+ 100 & 0.0010382 & 0.0007124 & 0.0004504 & 0.0004002 \\
+ \hline
+ 1000 & 0.008153 & 0.0046789 & 0.0036199 & 0.0025176 \\
+[1ex] 
+ \hline
+\end{tabular}
+\end{center}
+\paragraph{}На пересечении строки и столбца находится время сортировки в секундах данного количества элементов данным количеством процессов.
+\paragraph{}Время сортировки, выполненной на одном процессе с помощью не параллельной реализации:
+\begin{center}
+\begin{tabular}{||c c c c||} 
+ \hline
+ Кол-во элементов & 10 & 100 & 1000 \\ [0.5ex] 
+ \hline\hline
+ Время & 0 & 0.0011159 & 0.008284\\ 
+[1ex] 
+ \hline
+\end{tabular}
+\end{center}
+
+\part*{Выводы результатов}
+\paragraph{} Параллельная программа работает гораздо быстрее последовательной при больших данных (больше 10, как видно из таблиц). 
+
+\part*{Заключение}
+\paragraph{}В ходе данной лабораторной работы мною были описаны следующие алгоритмы: распараллеливание умножения разряженных матриц и планирование количества обрабатываемых данных для каждого столбца этих матриц. Реализована эта работа на языке C++ с использованием MPI.
+\paragraph{}В заключении стоит, наверное, отметить, что данная работа позволила самостоятельно разобраться, как использовать параллелизм на уровне процессов, а также рассмотреть реализацию MPI для C++.
+
+\part*{Литература}
+\begin{enumerate} 
+\item 1. Википедия: сайт. —  URL: https://ru.wikipedia.org/wiki/Message\_Passing\_Interface (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 2. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Comm\_size.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 3. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Comm\_rank.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 4. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Send.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 5. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Recv.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 6. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Wtime.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 7. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Scatterv.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\end{enumerate} 
+
+\part*{Приложение}
+\section{}CMakeLists.txt
+\begin{lstlisting}
+get_filename_component(ProjectId ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+enable_testing()
+
+if( USE_MPI )
+    if( UNIX )
+        set(CMAKE_C_FLAGS  "${CMAKE_CXX_FLAGS} -Wno-uninitialized")
+        set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wno-uninitialized")
+    endif( UNIX )
+
+    set(ProjectId "${ProjectId}_mpi")
+    project( ${ProjectId} )
+    message( STATUS "-- " ${ProjectId} )
+
+    file(GLOB_RECURSE ALL_SOURCE_FILES *.cpp *.h)
+
+    set(PACK_LIB "${ProjectId}_lib")
+    add_library(${PACK_LIB} STATIC ${ALL_SOURCE_FILES} )
+
+    add_executable( ${ProjectId} ${ALL_SOURCE_FILES} )
+
+    target_link_libraries(${ProjectId} ${PACK_LIB})
+    if( MPI_COMPILE_FLAGS )
+        set_target_properties( ${ProjectId} PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}" )
+    endif( MPI_COMPILE_FLAGS )
+
+    if( MPI_LINK_FLAGS )
+        set_target_properties( ${ProjectId} PROPERTIES LINK_FLAGS "${MPI_LINK_FLAGS}" )
+    endif( MPI_LINK_FLAGS )
+    target_link_libraries( ${ProjectId} ${MPI_LIBRARIES} )
+    target_link_libraries(${ProjectId} gtest gtest_main)
+
+    enable_testing()
+    add_test(NAME ${ProjectId} COMMAND ${ProjectId})
+
+    if( UNIX )
+        foreach (SOURCE_FILE ${ALL_SOURCE_FILES})
+            string(FIND ${SOURCE_FILE} ${PROJECT_BINARY_DIR} PROJECT_TRDPARTY_DIR_FOUND)
+            if (NOT ${PROJECT_TRDPARTY_DIR_FOUND} EQUAL -1)
+                list(REMOVE_ITEM ALL_SOURCE_FILES ${SOURCE_FILE})
+            endif ()
+        endforeach ()
+
+        find_program(CPPCHECK cppcheck)
+        add_custom_target(
+                "${ProjectId}_cppcheck" ALL
+                COMMAND ${CPPCHECK}
+                --enable=warning,performance,portability,information,missingInclude
+                --language=c++
+                --std=c++11
+                --error-exitcode=1
+                --template="[{severity}][{id}] {message} {callstack} \(On {file}:{line}\)"
+                --verbose
+                --quiet
+                ${ALL_SOURCE_FILES}
+        )
+    endif( UNIX )
+
+    SET(ARGS_FOR_CHECK_COUNT_TESTS "")
+    foreach (FILE_ELEM ${ALL_SOURCE_FILES})
+        set(ARGS_FOR_CHECK_COUNT_TESTS "${ARGS_FOR_CHECK_COUNT_TESTS} ${FILE_ELEM}")
+    endforeach ()
+
+    add_custom_target("${ProjectId}_check_count_tests" ALL
+            COMMAND "${Python3_EXECUTABLE}"
+                ${CMAKE_SOURCE_DIR}/scripts/check_count_tests.py
+                ${ProjectId}
+                ${ARGS_FOR_CHECK_COUNT_TESTS}
+    )
+else( USE_MPI )
+    message( STATUS "-- ${ProjectId} - NOT BUILD!"  )
+endif( USE_MPI )
+\end{lstlisting}
+
+\section{}main.cpp
+\begin{lstlisting}
+// Copyright 2022 Sigachev Anton
+#include <gtest/gtest.h>
+#include <algorithm>
+#include "../../../modules/task_3/sigachev_a_radix_sort_d_simple_merge/radix_sort_d_simple_merge.h"
+#include <gtest-mpi-listener.hpp>
+
+TEST(Radix_Sort, Test1_Not_Parallel_Radix_Sort_Double) {
+    int ProcRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+    if (ProcRank == 0) {
+        std::vector<double> v(10);
+        v = Get_Random_Vector(10);
+
+        std::vector<double> tmp = Not_Parallel_Radix_Sort(v);
+        std::sort(v.begin(), v.end());
+        ASSERT_EQ(tmp, v);
+    }
+}
+
+TEST(Radix_Sort, Test2_Parallel_Radix_Sort_Double) {
+    int ProcRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+    std::vector<double> v(10);
+    std::vector<double> tmp(10);
+
+    if (ProcRank == 0) {
+        tmp = Get_Random_Vector(10);
+        v = tmp;
+        std::sort(tmp.begin(), tmp.end());
+    }
+
+    std::vector<double> sort = Parallel_Radix_Sort(v);
+
+    if (ProcRank == 0) {
+        ASSERT_EQ(sort, tmp);
+    }
+}
+
+TEST(Radix_Sort, Test3_Not_Parallel_VS_Parallel_With_Small_Vector) {
+    int ProcRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+    double t1, t2, t3, t4;
+    std::vector<double> v(10);
+    std::vector<double> tmp(10);
+
+    if (ProcRank == 0) {
+        tmp = Get_Random_Vector(10);
+        v = tmp;
+        t2 = MPI_Wtime();
+        t1 = MPI_Wtime();
+        tmp = Not_Parallel_Radix_Sort(tmp);
+    }
+
+    std::vector<double> sort = Parallel_Radix_Sort(v);
+
+    if (ProcRank == 0) {
+        t4 = MPI_Wtime();
+        t3 = MPI_Wtime();
+        ASSERT_EQ(sort, tmp);
+        std::cout << "NotParallel " << t2 - t1 << std::endl;
+        std::cout << "Parallel " << t4 - t3 << std::endl;
+    }
+}
+
+TEST(Radix_Sort, Test4_Not_Parallel_VS_Parallel_With_Medium_Vector) {
+    int ProcRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+    double t1, t2, t3, t4;
+
+    std::vector<double> v(100);
+    std::vector<double> not_p_vec, p_vec;
+
+    if (ProcRank == 0) {
+        v = Get_Random_Vector(100);
+        t1 = MPI_Wtime();
+        not_p_vec = Not_Parallel_Radix_Sort(v);
+        t2 = MPI_Wtime();
+    }
+
+    if (ProcRank == 0) {
+        t3 = MPI_Wtime();
+    }
+
+    p_vec = Parallel_Radix_Sort(v);
+
+    if (ProcRank == 0) {
+        t4 = MPI_Wtime();
+    }
+
+    if (ProcRank == 0) {
+        ASSERT_EQ(p_vec, not_p_vec);
+        std::cout << "NotParallel " << t2 - t1 << std::endl;
+        std::cout << "Parallel " << t4 - t3 << std::endl;
+    }
+}
+
+TEST(Radix_Sort, Test5_Not_Parallel_VS_Parallel_With_Big_Vector_Effiency) {
+    int ProcRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+    double t1, t2, t3, t4;
+
+    std::vector<double> v(1000);
+    std::vector<double> not_p_vec, p_vec;
+
+    if (ProcRank == 0) {
+        v = Get_Random_Vector(1000);
+        t1 = MPI_Wtime();
+        not_p_vec = Not_Parallel_Radix_Sort(v);
+        t2 = MPI_Wtime();
+    }
+
+    if (ProcRank == 0) {
+        t3 = MPI_Wtime();
+    }
+
+    p_vec = Parallel_Radix_Sort(v);
+
+    if (ProcRank == 0) {
+        t4 = MPI_Wtime();
+    }
+
+    if (ProcRank == 0) {
+        ASSERT_EQ(p_vec, not_p_vec);
+        std::cout << "NotParallel " << t2 - t1 << std::endl;
+        std::cout << "Parallel " << t4 - t3 << std::endl;
+        std::cout << "Effiency " << (t2 - t1) / (t4 - t3) << std::endl;
+    }
+}
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    MPI_Init(&argc, &argv);
+
+    ::testing::AddGlobalTestEnvironment(new GTestMPIListener::MPIEnvironment);
+    ::testing::TestEventListeners& listeners =
+        ::testing::UnitTest::GetInstance()->listeners();
+
+    listeners.Release(listeners.default_result_printer());
+    listeners.Release(listeners.default_xml_generator());
+
+    listeners.Append(new GTestMPIListener::MPIMinimalistPrinter);
+    return RUN_ALL_TESTS();
+}
+
+\end{lstlisting}
+\section{} radix\_sort\_d\_simple\_merge.h,
+\begin{lstlisting}
+// Copyright 2022 Sigachev Anton
+#ifndef MODULES_TASK_3_SIGACHEV_A_RADIX_SORT_D_SIMPLE_MERGE_RADIX_SORT_D_SIMPLE_MERGE_H_
+#define MODULES_TASK_3_SIGACHEV_A_RADIX_SORT_D_SIMPLE_MERGE_RADIX_SORT_D_SIMPLE_MERGE_H_
+#include <mpi.h>
+#include <iostream>
+#include <random>
+#include <list>
+#include <string>
+#include <sstream>
+#include <vector>
+
+std::vector<double> Get_Random_Vector(int size);
+int LeftOfThePoint(double num);
+int RightOfThePoint(double num);
+std::vector<double> Merge(const std::vector<double>& vec_left,
+    const std::vector<double>& vec_right);
+int GetDigit(double num, int radix);
+std::vector<double> RadixSort(const std::vector<double>& vect, int rad);
+std::vector<double> Not_Parallel_Radix_Sort(const std::vector<double>& vect);
+std::vector<double> Parallel_Radix_Sort(const std::vector<double>& vec);
+
+#endif  // MODULES_TASK_3_SIGACHEV_A_RADIX_SORT_D_SIMPLE_MERGE_RADIX_SORT_D_SIMPLE_MERGE_H_
+
+\end{lstlisting}
+\section{} radix\_sort\_d\_simple\_merge.сpp,
+\begin{lstlisting}
+  // Copyright 2022 Sigachev Anton
+#include "../../../modules/task_3/sigachev_a_radix_sort_d_simple_merge/radix_sort_d_simple_merge.h"
+
+std::vector<double> Get_Random_Vector(int size) {
+    std::mt19937 gen(time(0));
+    std::uniform_real_distribution<> urd(0, 10000);
+    std::vector<double> vector(size);
+    for (int i = 0; i < static_cast<int>(vector.size()); i++) {
+        vector[i] = urd(gen);
+    }
+    return vector;
+}
+
+int LeftOfThePoint(double num) {
+    int num_of_radix = 0;
+    while (num > 1) {
+        num /= 10;
+        num_of_radix++;
+    }
+    return num_of_radix;
+}
+
+int RightOfThePoint(double num) {
+    std::ostringstream strs;
+    strs << num;
+    std::string str = strs.str();
+    if (str.find('.')) {
+        return -(static_cast<int>(str.find('.')) -
+            static_cast<int>(str.size())) - 1;
+    } else {
+        return 0;
+    }
+}
+
+std::vector<double> Merge(const std::vector<double>& vec_left,
+    const std::vector<double>& vec_right) {
+    std::vector<double> result((vec_left.size() + vec_right.size()));
+
+    int i = 0, j = 0, k = 0;
+    while (i < static_cast<int>(vec_left.size())
+        && j < static_cast<int>(vec_right.size())) {
+        if (vec_left[i] < vec_right[j])
+            result[k] = vec_left[i++];
+        else
+            result[k] = vec_right[j++];
+        k++;
+    }
+    while (i < static_cast<int>(vec_left.size())) {
+        result[k++] = vec_left[i++];
+    }
+    while (j < static_cast<int>(vec_right.size())) {
+        result[k++] = vec_right[j++];
+    }
+    return result;
+}
+
+
+int GetDigit(double num, int radix) {
+    if (radix > 0) {
+        double mask = pow(10, radix);
+        double tmp = num / mask;
+        return static_cast<int>(tmp) % 10;
+    }
+    return  static_cast<int>(num * pow(10, -radix)) % 10;
+}
+
+std::vector<double> RadixSort(const std::vector<double>& vect, int rad) {
+    std::vector<double> res;
+    std::vector <std::vector<double>> radix(10);
+
+    for (int i = 0; i < static_cast<int>(vect.size()); i++) {
+        radix[GetDigit(vect[i], rad)].push_back(vect[i]);
+    }
+    for (int i = 0; i < static_cast<int>(radix.size()); ++i)
+        for (int j = 0; j < static_cast<int>(radix[i].size()); ++j)
+            res.push_back(radix[i][j]);
+    return res;
+}
+
+std::vector<double> Not_Parallel_Radix_Sort(const std::vector<double>& vect) {
+    int radixNegativeZero = 0;
+    int maxRadixNegativeZero = RightOfThePoint(vect[0]);
+    for (int i = 1; i < static_cast<int>(vect.size()); ++i) {
+        radixNegativeZero = RightOfThePoint(vect[i]);
+        if (radixNegativeZero > maxRadixNegativeZero) {
+            maxRadixNegativeZero = radixNegativeZero;
+        }
+    }
+    double max = vect[0];
+    for (int i = 1; i < static_cast<int>(vect.size()); i++) {
+        if (vect[i] > max) {
+            max = vect[i];
+        }
+    }
+    int maxRadixPositiveZero = LeftOfThePoint(max);
+    std::vector<double> result(vect);
+    for (int i = -maxRadixNegativeZero; i <= maxRadixPositiveZero; i++) {
+        result = RadixSort(result, i);
+    }
+    return result;
+}
+
+std::vector<double> Parallel_Radix_Sort(const std::vector<double>& vec) {
+    int ProcNum, ProcRank;
+    MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+    std::vector<double> result;
+
+    int size = vec.size();
+    std::vector<int> sendcounts(ProcNum);
+    std::vector<int> displs(ProcNum);
+
+    int count;
+
+    if ((ProcRank < size % ProcNum))
+        count = (size / ProcNum) + 1;
+    else
+        count = size / ProcNum;
+
+    std::vector<double> recvbuf(count);
+
+    if (recvbuf.size() == 0)
+        recvbuf.resize(1);
+
+    displs[0] = 0;
+
+    for (int i = 0; i < ProcNum; i++) {
+        if (i < (size % ProcNum))
+            sendcounts[i] = (size / ProcNum) + 1;
+        else
+            sendcounts[i] = size / ProcNum;
+        if (i > 0)
+            displs[i] = (displs[i - 1] + sendcounts[i - 1]);
+    }
+
+    MPI_Scatterv(vec.data(), sendcounts.data(), displs.data(),
+        MPI_DOUBLE, recvbuf.data(), count, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    recvbuf = Not_Parallel_Radix_Sort(recvbuf);
+
+    if (ProcRank != 0) {
+        MPI_Send(recvbuf.data(), count, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+    } else {
+        result = recvbuf;
+        MPI_Status status;
+        for (int i = 1; i < ProcNum; i++) {
+            recvbuf.resize(sendcounts[i]);
+            MPI_Recv(recvbuf.data(), sendcounts[i], MPI_DOUBLE,
+                i, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            result = Merge(result, recvbuf);
+        }
+    }
+    return result;
+}
+
+\end{lstlisting}
+
+\end{document}
