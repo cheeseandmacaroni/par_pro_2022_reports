@@ -106,14 +106,14 @@
 \paragraph{}Алгоритм планирования занимается подсчётом размера данных (количество элементов массива), которые достаются каждому отдельному процессу. Пусть имеется n элементов и m процессов, среди которых нужно распределить эти элементы, а количество этих элементов будет записываться в одномерный массив с названием elements\_per\_proc размером m, каждый номер ячейки которого совпадает с номером процесса. Алгоритм на псевдокоде:
 \begin{lstlisting}
 remained_elements = n mod m;
-цикл от proc_number := 0 до m [шаг 1]
+while from proc_number := 0 to m [step 1]
    elements_per_proc[proc_number] := n div m;
-   если (remained_elements > 0) 
-то
+   if (remained_elements > 0) 
+to
 elements_per_proc[proc_number] := elements_per_proc[proc_number] + 1;
 remained_elements := remained_elements - 1;
-  всё-если
-всё-цикл
+  end-if
+end-while
 \end{lstlisting}
 \paragraph{}В результате работы этого алгоритма массив elements\_per\_proc будет содержать количество элементов, которое нужно будет отсортировать процессу с номером таким же, что и номер ячейки этого массива.
 \paragraph{}Алгоритм сортировки следующий: 
