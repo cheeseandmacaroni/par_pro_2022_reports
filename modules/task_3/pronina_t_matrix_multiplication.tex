@@ -1,0 +1,626 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage{graphicx}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{color}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  language=Java,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+
+\title{}
+\author{}
+\date{}
+\begin{document}
+
+\begin{titlepage}
+    \newpage
+    \begin{center}
+    {\bfseries МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ РОССИЙСКОЙ ФЕДЕРАЦИИ
+Федеральное государственное автономное образовательное учреждение
+высшего образования
+ \\
+    «Национальный исследовательский
+Нижегородский государственный университет им. Н.И. Лобачевского»
+(ННГУ)
+}
+
+    %\begin{center}
+     Институт информационных технологий, математики и механики \\
+    \end{center}
+
+    \vspace{1.2em}
+
+    \begin{center}
+    %\textsc{\textbf{}}
+    \Large отчет \linebreak по дисциплине «Параллельное программирование» \linebreak на тему: \linebreak
+«Умножение разряженных матриц. Элементы типа double. Формат хранения матрицы - столбцовый (ccs)»
+
+    \end{center}
+
+    \vspace{5em}
+
+
+    \begin{flushright}
+                       Выполнил(а):
+                       студент группы 382008-2\linebreakПронина Т.И.\underline{\hspace{3cm}} \linebreak\linebreakПроверил: младший научный сотрудник\linebreakНестеров А.Ю.\underline{\hspace{3cm}} 
+    \end{flushright}
+
+
+    \vspace{\fill}
+
+    \begin{center}
+    Нижний Новгород 2022
+    \end{center}
+
+    \end{titlepage}
+    
+\maketitle
+
+\part*{Введение}
+\paragraph{}Алгоритмы обработки разреженных матриц работают только с ненулевыми элементами, а значит, что число операций будет пропорционально числу ненулевых элементов.
+\paragraph{}Наиболее популярные 2 схемы хранения разреженных матриц – «Разреженный строчный формат» и «Разреженный столбцовый формат». Данные схемы не будут предъявлять большие требования к памяти, к тому же они удобные для выполнения операций перестановок строк и столбцов, транспонирования, решения систем линейных уравнений, сложении и, в моем случае, умножении.
+
+\part*{Постановка задачи}
+\paragraph{}В ходе выполнения 3 лабораторной работы необходимо реализовать параллельную версию алгоритма умножения разряженных матриц на языке C++, используя MPI. При этом элементы матрицы - типа double, а формат хранения матрицы - столбцовый (ccs). Т.к. схема вертикальная, вектор делится между процессами. Величина матриц может быть любая.
+\paragraph{}Результатом работы программы будет ее корректное выполнение на нескольких процессах, а также набор пройденных тестов, проверяющих работу этой программы. В процессе выполнения лабораторной работы использовать систему контроля версия [Git][git] и фрэймворк для разработки автоматических тестов [Google Test][gtest].
+\paragraph{}В завершении работы должны быть приведены 4 файла(CMakeLists.txt, main.cpp, matrix\_multiplication.h, matrix\_multiplication.cpp), полученные результаты и заключение
+
+\part*{Описание алгоритма}
+\paragraph{}Для хранения разреженных матриц используется «Разреженный столбцовый формат», известный под такой аббревиатурой, как CCS(Compressed Column Storage) или CSC(Compressed Sparse Columns). Матрица в таком состоянии хранится в виде 3 массивов:
+\begin{enumerate} 
+\item Вектор ненулевых значений матрицы val;
+\item Вектор индексов начала столбцов col\_ptr;
+\item Вектор индексов строк для каждого из столбцов row\_index.
+\end{enumerate} 
+\paragraph{}Формат CCS предоставляет быстрый доступ к столбцам, при этом столбцы рассматриваются по порядку, хотя внутри них элементы могут быть, как упорядочены, так и нет. В первом случае достигается быстрый поиск элементов, хотя приходится “платить” за поддержание такой упорядоченности. Во втором же случае ничего поддерживать не надо, но зато поиск осуществляется лишь перебором. Существует также модификация CCS с четырьмя массивами, где последний массив хранит индексы элементов, идущих в конце столбца. Столбцы тогда могут не быть упорядочены, а их перестановка проводится без перепаковки путем изменения индексов. Данная модификация в лабораторной работе не используется.
+\paragraph{}Для реализации умножения нужно, прежде всего, следовать условиям задачи и реализовать трансформацию разреженной матрицы A(N*N) в формат CCS. 
+\paragraph{}Теперь можно непосредственно выполнять умножение. Алгоритм умножение разреженных матриц A и B в форматах CCS состоит в следующем:
+\begin{enumerate} 
+\item Инициализировать структуру данных для матрицы C = A*B;
+\item Последовательно перемножить каждый столбец матрицы A на каждую из строк матрицы B, записывая в C полученные результаты и формируя ее структуру.
+\end{enumerate} 
+\paragraph{}При умножении столбцов возникает задача сопоставления с целью выделения пар ненулевых элементов. В простейшем варианте это решается простым перебором для каждого элемента столбца матрицы AT элементов столбца матрицы B до тех пор, пока не будет найден элемент с таким же значением в массиве row\_index или не закончится строка. Хотя это излишне, ведь вектора упорядочены! Для решения проблемы достаточно:
+\begin{enumerate} 
+\item Встать на начало обоих векторов (a\_col= …, b\_col= …);
+\item Сравнить текущие элементы A. row\_index [a\_col]и B. row\_index [b\_col];
+\item Если значения совпадают, просуммировать A.val[a\_c] * B.Value[b\_c] и увеличить оба индекса, в противном случае – увеличить один из индексов, в зависимости от того, какое значение больше.
+\end{enumerate} 
+
+\part*{Описание распараллеливания}
+\paragraph{}Предположим, что нам необходимо умножить две разреженные матрицы, которые хранятся в столбцовом формате. С = А*В.
+\paragraph{}Для этого сначала нужно перевести матрицу A в столбцовый вид, а затем перемножить столбцы матрицы A на столбцы матрицы B. Большую часть времени работы алгоритма занимает умножение матриц. Поэтому данная часть будет распараллелена. Перевод матрицы в столбцовый вид будет выполняться последовательно.
+\paragraph{}После того, как выполнили столбцевание матрицы A, имеются следующие исходные данные:
+\begin{enumerate} 
+\item массив \_A.val – ненулевые элементы матрицы А;
+\item массив \_A.row\_index – массив номеров строк элементов матрицы А;
+\item массив \_A.col\_ptr – массив начала столбцов матрицы А;
+\item массив \_B.val – ненулевые элементы матрицы B;
+\item массив \_B.row\_index – массив номеров строк элементов матрицы B;
+\item массив \_B.col\_ptr – массив начала столбцов матрицы B;
+\end{enumerate} 
+\paragraph{}Перед тем, как начать классическое умножение, происходит ряд проверок:
+\begin{enumerate} 
+\item Если запущен всего 1 процесс, то умножаем А и В последовательно основным процессом;
+\item Если количество ненулевых элементов из таблиц А и В будет равно 0, то умножаем основным процессом последовательно, иначе отправляем процессам пустой вектор, дабы избежать ошибки;
+\item Если количество столбцов меньше числа процессов, то умножаем последовательно в основном процессе, иначе опять отправляем пустой вектор.
+\end{enumerate} 
+\paragraph{}
+Далее начинается OpenMPI часть.
+\begin{enumerate} 
+\item Отправляем данные о матрицах А и В всем процессам, выдаем каждому процессу его собственый фрагмент матрицы А.
+\item После получаем от каждого процесса его собственный результат и сохраняем каждый результат локально.
+\item В итоге собираем все полученные результаты в один.
+\end{enumerate} 
+
+\part*{Описание схемы OpenMPI}
+\paragraph{}За получение количества процессов отвечает функция MPI\_Comm\_size, её параметры: comm - коммуникатор, size - переменная, куда запишется количество процессов. В моем случае comm - MPI\_COMM\_WORLD.
+\paragraph{}За получение номера процесса отвечает функция  MPI\_Comm\_rank,ее параметры: comm - коммуникатор, rank - переменная, куда запишется номера процесса.
+\paragraph{}Далее идет проверка с прошлого раздела: проверка на количество процессов. Если запущен 1 процесс, то умножаем матрицы А и В последовательно основным процессом.
+\paragraph{}Если все хорошо, то отправляем данные о столбцах, строках и ненулевых значениях таблиц А и В  всем процессам. Отправка данных с помощью MPI может выполняться функцией MPI\_Bcast(). Передает данные от одного участника группы всем членам группы. Параметры функции:
+\begin{enumerate} 
+\item buffer [in, out]\\
+Указатель на буфер данных. В процессе, указанном корневым параметром, буфер содержит данные для трансляции. Во всех остальных процессах в коммуникаторе, указанном параметром comm , буфер получает данные, транслироваемые корневым процессом.
+\item count [in]\\
+Количество элементов данных в буфере. Если параметр count равен нулю, часть данных сообщения пуста.
+\item тип данных [in]\\
+Тип данных MPI элементов в буфере отправки.
+\item root [in]\\
+Ранг процесса, отправляющего данные.
+\item comm [in]\\
+Дескриптор MPI\_Comm .
+\end{enumerate} 
+\paragraph{}Возвращает MPI\_SUCCESS при успешном выполнении. В противном случае возвращаемое значение является кодом ошибки.
+\paragraph{}Далее смотрим, если у матриц А или В нет нулевых элементов И номер процесса не равен 0, то просто пока что передаем пустой вектор в процесс, дабы избежать ошибки. Иначе если, то умножаем матрицы А и В последовательно основным процессом.
+\paragraph{}Заодно проверяем число столбцов таблицы А на совпадение с числом строк таблицы В. Необходимо, чтобы они совпадали для умножения.
+\paragraph{}Еще одна проверка, теперь если число столбцов меньше числа процессов, то умножаем A и B последовательно основным процессом. Иначе если, то все успешно и отправляем пустой вектор. 
+\paragraph{}Далее необходимо обновить размеры векторов строк, столбцов и ненулевых значений каждой матрицы, чтобы после переотправить эти данные процессам.
+\paragraph{}Процессам выдаем их личный кусок матрицы А, чтобы те в итоге выдали результат. Объединением полученных результатов занимается функция MPI\_Reduce. Функция MPI\_REDUCE объединяет элементы входного буфера каждого процесса в группе, используя операцию op , и возвращает объединенное значение в выходной буфер процесса с номером root. Параметры функции:
+\begin{enumerate} 
+\item sendbuf [in]\\
+Адрес посылающего буфера (альтернатива).
+\item recvbuf [out]\\
+Адрес принимающего буфера (альтернатива, используется только корневым процессом).
+\item count [in]\\
+Количество элементов в посылающем буфере (целое).
+\item datatype [in]\\
+Тип данных элементов посылающего буфера (дескриптор).
+\item op [in]\\
+Операция редукции (дескриптор).
+\item comm [in]\\
+Коммуникатор (дескриптор).
+\end{enumerate} 
+
+\part*{Результаты экспериментов}
+\paragraph{}С помощью MPI\_Wtime() можно засечь время выполнения.
+\paragraph{}Я тестирую работу своей программы на следующих данных: количество процессов меняется от 1 до 6; процессы исполняют одни и те же три теста: перемножают матрицы 20*20, 50*50, 75*75 элементов. Таблица ниже содержит результаты выполнения этих тестов.
+\begin{center}
+\begin{tabular}{||c c c c c c c ||} 
+ \hline
+ Процессы/матрицы & 1proc & 2proc & 3proc & 4proc & 5proc & 6proc \\ [0.5ex] 
+ \hline\hline
+ 20*20 & 0.0001331 & 0.000895 & 0.0001588 & 0.0001438 & 0.0001581 & 0.0002585\\ 
+ \hline
+ 50*50 & 0.0009573 & 0.0052256 & 0.0007877 & 0.0008613 & 0.0008578 & 0.0011649\\
+ \hline
+ 75* 75 & 0.003055 & 0.0093866 & 0.0025651 & 0.002341 &  0.0025548 & 0.0026991\\
+[1ex] 
+ \hline
+\end{tabular}
+\end{center}
+\paragraph{}На пересечении строки и столбца находится время сортировки в секундах данного количества элементов данным количеством процессов.
+
+\part*{Выводы результатов}
+\paragraph{} Нет толка использовать большое число процессов для малых матриц поскольку накладные расходы становятся больше, чем требуемые вычисления
+
+\part*{Заключение}
+\paragraph{}В ходе данной лабораторной работы мною были описаны следующие алгоритмы: распараллеливание умножения разряженных матриц и планирование количества обрабатываемых данных для каждого столбца этих матриц. Реализована эта работа на языке C++ с использованием MPI.
+\paragraph{}В заключении стоит, наверное, отметить, что данная работа позволила самостоятельно разобраться, как использовать параллелизм на уровне процессов, а также рассмотреть реализацию MPI для C++.
+\part*{Литература}
+\begin{enumerate} 
+\item 1. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Comm\_size.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 2. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Comm\_rank.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 3. MPICH.org: сайт —  URL: https://www.mpich.org/static/docs/latest/www3/MPI\_Wtime.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 4. learn.microsoft.com: сайт —  URL: https://learn.microsoft.com/ru-ru/message-passing-interface/mpi-bcast-function (дата обращения: 26.12.2022). —  Текст: электронный.
+\item 5. opennet.ru: сайт —  URL: https://www.opennet.ru/docs/RUS/mpi-1/node81.html (дата обращения: 26.12.2022). —  Текст: электронный.
+\end{enumerate} 
+
+\part*{Приложение}
+\section{}CMakeLists.txt
+\begin{lstlisting}
+get_filename_component(ProjectId ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+enable_testing()
+
+if( USE_MPI )
+    if( UNIX )
+        set(CMAKE_C_FLAGS  "${CMAKE_CXX_FLAGS} -Wno-uninitialized")
+        set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wno-uninitialized")
+    endif( UNIX )
+
+    set(ProjectId "${ProjectId}_mpi")
+    project( ${ProjectId} )
+    message( STATUS "-- " ${ProjectId} )
+
+    file(GLOB_RECURSE ALL_SOURCE_FILES *.cpp *.h)
+
+    set(PACK_LIB "${ProjectId}_lib")
+    add_library(${PACK_LIB} STATIC ${ALL_SOURCE_FILES} )
+
+    add_executable( ${ProjectId} ${ALL_SOURCE_FILES} )
+
+    target_link_libraries(${ProjectId} ${PACK_LIB})
+    if( MPI_COMPILE_FLAGS )
+        set_target_properties( ${ProjectId} PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}" )
+    endif( MPI_COMPILE_FLAGS )
+
+    if( MPI_LINK_FLAGS )
+        set_target_properties( ${ProjectId} PROPERTIES LINK_FLAGS "${MPI_LINK_FLAGS}" )
+    endif( MPI_LINK_FLAGS )
+    target_link_libraries( ${ProjectId} ${MPI_LIBRARIES} )
+    target_link_libraries(${ProjectId} gtest gtest_main)
+
+    enable_testing()
+    add_test(NAME ${ProjectId} COMMAND ${ProjectId})
+
+    if( UNIX )
+        foreach (SOURCE_FILE ${ALL_SOURCE_FILES})
+            string(FIND ${SOURCE_FILE} ${PROJECT_BINARY_DIR} PROJECT_TRDPARTY_DIR_FOUND)
+            if (NOT ${PROJECT_TRDPARTY_DIR_FOUND} EQUAL -1)
+                list(REMOVE_ITEM ALL_SOURCE_FILES ${SOURCE_FILE})
+            endif ()
+        endforeach ()
+
+        find_program(CPPCHECK cppcheck)
+        add_custom_target(
+                "${ProjectId}_cppcheck" ALL
+                COMMAND ${CPPCHECK}
+                --enable=warning,performance,portability,information,missingInclude
+                --language=c++
+                --std=c++11
+                --error-exitcode=1
+                --template="[{severity}][{id}] {message} {callstack} \(On {file}:{line}\)"
+                --verbose
+                --quiet
+                ${ALL_SOURCE_FILES}
+        )
+    endif( UNIX )
+
+    SET(ARGS_FOR_CHECK_COUNT_TESTS "")
+    foreach (FILE_ELEM ${ALL_SOURCE_FILES})
+        set(ARGS_FOR_CHECK_COUNT_TESTS "${ARGS_FOR_CHECK_COUNT_TESTS} ${FILE_ELEM}")
+    endforeach ()
+
+    add_custom_target("${ProjectId}_check_count_tests" ALL
+            COMMAND "${Python3_EXECUTABLE}"
+                ${CMAKE_SOURCE_DIR}/scripts/check_count_tests.py
+                ${ProjectId}
+                ${ARGS_FOR_CHECK_COUNT_TESTS}
+    )
+else( USE_MPI )
+    message( STATUS "-- ${ProjectId} - NOT BUILD!"  )
+endif( USE_MPI )
+\end{lstlisting}
+
+\section{}main.cpp
+\begin{lstlisting}
+// Copyright 2022 Pronina Tatiana
+
+#include <gtest/gtest.h>
+#include <vector>
+#include "./pronina_t_matrix_multiplication.h"
+#include <gtest-mpi-listener.hpp>
+
+
+TEST(CCS_Matrix_mult, Sequential_multiplication) {
+  int ProcRank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+  if (ProcRank == 0) {
+    SparseMatrix A, B;
+    A = CCS(std::vector<double>{0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0}, 3, 4);
+    B = CCS(std::vector<double>{3, 0, 0, 0, 4, 0}, 2, 3);
+
+    std::vector<double> result = A * B;
+    std::vector<double> exp_result{ 4, 0, 0, 0, 12, 0, 0, 0 };
+
+    ASSERT_EQ(result, exp_result);
+  }
+}
+
+TEST(CCS_Matrix_mult, Parallel_multiplication) {
+  int ProcRank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+  SparseMatrix A, B;
+  if (ProcRank == 0) {
+    A = CCS(std::vector<double>{0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0}, 3, 4);
+    B = CCS(std::vector<double>{3, 0, 0, 0, 4, 0}, 2, 3);
+  }
+
+  std::vector<double> result = Multiply(A, B);
+
+  if (ProcRank == 0) {
+    std::vector<double> exp_result{ 4, 0, 0, 0, 12, 0, 0, 0 };
+
+    ASSERT_EQ(result, exp_result);
+  }
+}
+
+TEST(CCS_Matrix_mult, Random_20x20) {
+  int ProcRank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+  SparseMatrix A, B;
+  if (ProcRank == 0) {
+    A = CCS(RandMatrix(20, 20), 20, 20);
+    B = CCS(RandMatrix(20, 20), 20, 20);
+  }
+
+  std::vector<double> result = Multiply(A, B);
+
+  if (ProcRank == 0) {
+    std::vector<double> exp_result = A * B;
+
+    ASSERT_EQ(result, exp_result);
+  }
+}
+
+TEST(CCS_Matrix_mult, Random_50x50) {
+  int ProcRank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+  SparseMatrix A, B;
+  if (ProcRank == 0) {
+    A = CCS(RandMatrix(50, 50), 50, 50);
+    B = CCS(RandMatrix(50, 50), 50, 50);
+  }
+
+  std::vector<double> result = Multiply(A, B);
+
+  if (ProcRank == 0) {
+    std::vector<double> exp_result = A * B;
+
+    ASSERT_EQ(result, exp_result);
+  }
+}
+
+TEST(CCS_Matrix_mult, Random_75x75) {
+  int ProcRank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+  SparseMatrix A, B;
+  if (ProcRank == 0) {
+    A = CCS(RandMatrix(75, 75), 75, 75);
+    B = CCS(RandMatrix(75, 75), 75, 75);
+  }
+  std::vector<double> result = Multiply(A, B);
+
+  if (ProcRank == 0) {
+    std::vector<double> exp_result = A * B;
+    ASSERT_EQ(result, exp_result);
+  }
+}
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  MPI_Init(&argc, &argv);
+
+  ::testing::AddGlobalTestEnvironment(new GTestMPIListener::MPIEnvironment);
+  ::testing::TestEventListeners& listeners =
+    ::testing::UnitTest::GetInstance()->listeners();
+
+  listeners.Release(listeners.default_result_printer());
+  listeners.Release(listeners.default_xml_generator());
+
+  listeners.Append(new GTestMPIListener::MPIMinimalistPrinter);
+  return RUN_ALL_TESTS();
+}
+\end{lstlisting}
+\section{} matrix\_multiplication.h,
+\begin{lstlisting}
+// Copyright 2022 Pronina Tatiana
+
+#ifndef MODULES_TASK_3_PRONINA_T_MATRIX_MULTIPLICATION_PRONINA_T_MATRIX_MULTIPLICATION_H_
+#define MODULES_TASK_3_PRONINA_T_MATRIX_MULTIPLICATION_PRONINA_T_MATRIX_MULTIPLICATION_H_
+
+#include <vector>
+
+struct SparseMatrix {
+  // Non-zero coefficients of the matrix
+  std::vector<double> val;
+  // Pointer to the index of the non-zero coefficient of the array val
+  std::vector<int> col_ptr;
+  // Lowercase indexes for each column of the matrix
+  std::vector<int> row_index;
+  int columns = 0, rows = 0, non_zero = 0;
+
+  friend const std::vector<double> operator*(const SparseMatrix& _A,
+    const SparseMatrix& _B);
+};
+
+SparseMatrix CCS(const std::vector<double>& _newMatrix,
+  const int _newColumns, const int _newRows);
+
+std::vector<double> Multiply(SparseMatrix _A, SparseMatrix _B);
+std::vector<double> RandMatrix(const int _columns, const int _rows);
+
+#endif  // MODULES_TASK_3_PRONINA_T_MATRIX_MULTIPLICATION_PRONINA_T_MATRIX_MULTIPLICATION_H_
+\end{lstlisting}
+\section{} matrix\_multiplication.cpp,
+\begin{lstlisting}
+// Copyright 2022 Pronina Tatiana
+#include "../../../modules/task_3/pronina_t_matrix_multiplication/pronina_t_matrix_multiplication.h"
+#include <mpi.h>
+#include <ctime>
+#include <random>
+#include <vector>
+
+// Converting a matrix to columnar storage
+SparseMatrix CCS(const std::vector<double>& _newMatrix, const int _newColumns,
+  const int _newRows) {
+  SparseMatrix res;
+  res.columns = _newColumns;
+  res.rows = _newRows;
+  res.non_zero = 0;
+
+  res.col_ptr.push_back(0);
+  for (int col = 0; col < _newColumns; col++) {
+    int nnzCount = 0;
+    for (int i = col; i <= (_newRows - 1) * _newColumns + col;
+      i += _newColumns) {
+      if (_newMatrix[i] == 0) {
+        continue;
+      }
+      nnzCount++;
+      res.val.push_back(_newMatrix[i]);
+      res.row_index.push_back((i - col) / _newColumns);
+    }
+    res.col_ptr.push_back(res.col_ptr.back() + nnzCount);
+    res.non_zero += nnzCount;
+  }
+
+  return res;
+}
+
+// Multiplication operator
+const std::vector<double> operator*(const SparseMatrix& _A,
+  const SparseMatrix& _B) {
+  if (_A.columns != _B.rows) {
+    throw "incorrect size";
+  }
+
+  std::vector<double> res(_A.rows * _B.columns, 0);
+
+  for (int a_col = 0; a_col < _A.columns; a_col++) {
+    for (int b_col = 0; b_col < _B.columns; b_col++) {
+      for (int i = _A.col_ptr[a_col]; i <= _A.col_ptr[a_col + 1] - 1; i++) {
+        if (_B.col_ptr[b_col + 1] - _B.col_ptr[b_col] == 0) {
+          continue;
+        }
+
+        for (int j = _B.col_ptr[b_col];
+          j < _B.col_ptr[b_col + 1]; j++) {
+          if (_B.row_index[j] == a_col) {
+            // [interpreting a two-dimensional array into a one-dimensional one]
+            res[_A.row_index[i] * _B.columns + b_col]
+              += _A.val[i] * _B.val[j];
+          }
+        }
+      }
+    }
+  }
+
+  return res;
+}
+
+// Parallel multiplication
+std::vector<double> Multiply(SparseMatrix _A, SparseMatrix _B) {
+  int ProcRank, ProcNum;
+  MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+  MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
+
+  if (ProcNum == 1) {
+    return _A * _B;
+  }
+
+  // Data is sent to all processes
+  MPI_Bcast(&_A.columns, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_A.rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_A.non_zero, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  MPI_Bcast(&_B.columns, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_B.rows, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_B.non_zero, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  if (_A.non_zero == 0 || _B.non_zero == 0) {
+    // The main process does the multiplication sequentially
+    if (ProcRank == 0) {
+      return _A * _B;
+    } else {
+      // the rest of the processes get an empty vector to get something,
+      // in order to avoid an error
+      return std::vector<double>();
+    }
+  }
+
+  if (_A.columns != _B.rows) {
+    throw "incorrect size";
+  }
+  // if the number of columns is less than the number of processes
+  if (_A.columns < ProcNum) {
+    if (ProcRank == 0) {
+      return _A * _B;  // The main process does the multiplication sequentially
+    } else {
+      // the rest of the processes get an empty vector to get something,
+      // in order to avoid an error
+      return std::vector<double>();
+    }
+  }
+
+  if (ProcRank != 0) {
+    _A.val.resize(_A.non_zero);  // Changing the size
+    _A.row_index.resize(_A.non_zero);
+    _A.col_ptr.resize(_A.columns + 1);
+    _B.val.resize(_B.non_zero);
+    _B.row_index.resize(_B.non_zero);
+    _B.col_ptr.resize(_B.columns + 1);
+  }
+  // send data about matrix A to all processes
+  MPI_Bcast(&_A.val[0], _A.non_zero, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_A.row_index[0], _A.non_zero, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_A.col_ptr[0], _A.columns + 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  // send data about matrix B to all processes
+  MPI_Bcast(&_B.val[0], _B.non_zero, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_B.row_index[0], _B.non_zero, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&_B.col_ptr[0], _B.columns + 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  // distribute to each process its own piece of the matrix A
+  int delta = _A.columns / ProcNum;
+  // Denoting the boundaries
+  int leftBound = ProcRank * delta;
+  int rightBound = (ProcRank + 1) * delta;
+
+  if (ProcRank == ProcNum - 1) {
+    rightBound = _A.columns;
+  }
+
+  // Declaring a vector to store the local result
+  // (each process has its own result)
+  std::vector<double> localResult(_A.rows * _B.columns);
+
+  for (int a_col = leftBound; a_col < rightBound; a_col++) {
+    for (int b_col = 0; b_col < _B.columns; b_col++) {
+      for (int i = _A.col_ptr[a_col]; i <= _A.col_ptr[a_col + 1] - 1; i++) {
+        if (_B.col_ptr[b_col + 1] - _B.col_ptr[b_col] == 0) {
+          continue;
+        }
+
+        for (int j = _B.col_ptr[b_col];
+          j <= _B.col_ptr[b_col + 1] - 1; j++) {
+          if (_B.row_index[j] == a_col) {
+            localResult[_A.row_index[i] * _B.columns + b_col]
+              += _A.val[i] * _B.val[j];
+          }
+        }
+      }
+    }
+  }
+
+  // Declaring a vector to collect local results
+  std::vector<double> globalResult;
+  if (ProcRank == 0) {
+    globalResult.resize(_A.rows * _B.columns);
+  }
+
+  if (ProcRank == 0) {
+    MPI_Reduce(&localResult[0], &globalResult[0], _A.rows * _B.columns,
+      MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&localResult[0], MPI_IN_PLACE, _A.rows * _B.columns,
+      MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  }
+
+  return globalResult;
+}
+
+std::vector<double> RandMatrix(const int _columns, const int _rows) {
+  if (_rows <= 0 || _columns <= 0) {
+    throw "incorrect size";
+  }
+
+  std::srand(std::time(nullptr));
+  std::vector<double> result(_columns * _rows);
+
+  for (int i = 0; i < _rows * _columns; i++) {
+    double randVal = static_cast<double>(std::rand() % 50 + 1);
+    if (randVal < 4) {
+      result[i] = randVal;
+    } else {
+      result[i] = 0;
+    }
+  }
+  return result;
+}
+\end{lstlisting}
+
+\end{document}
