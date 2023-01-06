@@ -1,0 +1,495 @@
+\documentclass[14pt, a4paper]{extarticle}
+\usepackage[utf8]{inputenc}
+\usepackage[T2A]{fontenc}
+\usepackage{babel}
+\usepackage[a4paper,
+left=2cm,
+right=2cm,
+top=2cm,
+bottom=2cm]{geometry}
+\usepackage{color}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{tocloft}
+\usepackage{indentfirst}
+\usepackage{enumitem}
+
+\setlength{\parindent}{0.8cm}
+\setlength{\parskip}{0.4cm}
+\renewcommand{\contentsname}{}
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=none,
+	language=C++,
+	aboveskip=3mm,
+	belowskip=3mm,
+	showstringspaces=false,
+	columns=flexible,
+	basicstyle={\small\ttfamily},
+	numbers=none,
+	numberstyle=\tiny\color{gray},
+	keywordstyle=\color{blue},
+	commentstyle=\color{dkgreen},
+	stringstyle=\color{mauve},
+	breaklines=true,
+	breakatwhitespace=true,
+	tabsize=4
+}
+
+\title{}
+\author{}
+\date{}
+
+\begin{document}
+	\begin{titlepage}
+		\begin{center}
+			{\bfseries МИНИСТЕРСТВО НАУКИ И ВЫСШЕГО ОБРАЗОВАНИЯ \\
+				РОССИЙСКОЙ ФЕДЕРАЦИИ}
+			\\
+			Федеральное государственное автономное образовательное учреждение высшего образования
+			\\
+			{\bfseries «Национальный исследовательский Нижегородский государственный университет им. Н.И. Лобачевского»\\(ННГУ)
+				\\Институт информационных технологий, математики и механики} \\
+		\end{center}
+
+		\vspace{8em}
+
+		\begin{center}
+			ОТЧЕТ \\ по лабораторной работе \\
+			«Сортировка Шелла с простым слиянием»
+		\end{center}
+
+		\vspace{5em}
+
+
+		\begin{flushright}
+			{\bfseries Выполнил:} студент группы\\382006-2\\Кролевец Н.А. \underline{\hspace{3cm}} \linebreak\linebreak\linebreak
+			{\bfseries Проверил:} младший научный\\сотрудник\\Нестеров А.Ю. \underline{\hspace{3cm}} 
+		\end{flushright}
+
+
+		\vspace{\fill}
+
+		\begin{center}
+			Нижний Новгород\\2023
+		\end{center}
+
+	\end{titlepage}
+
+	\tableofcontents
+	\thispagestyle{empty}
+	\newpage
+
+	\pagestyle{plain}
+	\setcounter{page}{3}
+
+	\section{Введение}
+        В рамках курса по параллельному программированию передо мной была поставлена следующая задача: «Сортировка Шелла с простым слиянием». Решить ее предстоит с помощью средств MPI (Message Passing Interface). Ниже будут представлены: описание работы алгоритма, его MPI версия, результаты экспериментов, а также исходный код.
+	\newpage
+
+	\section{Постановка задачи}
+        Необходимо с помощью средств MPI реализовать сортировку слиянием, которая на нижнем уровне будет использовать сортировку Шелла. В качестве входных данных будет использоваться массив случайных равномерно распределенных 4-х байтовых вещественных чисел (float).
+
+        Будут реализованы: генерация входного массива, сортировка Шелла, сортировка слиянием, ее параллельная версия. 
+
+        Тестирование алгоритма будет проходить на массивах различной длины, вспомогательные функции в отдельных тестах не нуждаются. Массив будет отсортирован по неубыванию, будет проведена очевидная проверка на корректность. 
+
+	\newpage
+
+	\section{Описание алгоритма}
+	Результат лабораторной работы - гибрид сортировки слиянием и сортировки Шелла, ниже будут кратко описаны обе сортировки.
+
+	\textbf{Сортировка Шелла }\\
+        Сортировка Шелла представляет собой усовершенствованную сортировку вставками. Главное преимущество алгоритма – уменьшение числа перестановок.
+        
+        На каждом шаге сортировки выбирается промежуток d, формируются подпоследовательности из элементов, различающихся на d позиций и сортируются (например, сортировкой вставками). Последовательность  промежутков, предложенная Шеллом[1] такова: $d_1=N/2, d_2=d_1/2$ и т.д.
+
+        Сложность алгоритма зависит от выбора последовательности промежутков, в реализации Шелла сложность равна $O(n^2)$.
+        Существуют иные последовательности, уменьшающие худшее время работы, в том числе эмпирические, но я решил остановиться на классическом варианте.
+        
+        \textbf{Сортировка слиянием }\\
+        На каждом шаге массив делится пополам. Когда размер достигает единицы начинается обратный процесс – из двух отсортированных (инвариант алгоритма) 
+        подмассивов собирается массив длины $N_1 + N_2$, где $N_1$ – длина первого подмассива, $N_2$ - длина второго подмассива. 
+        Объединение отсортированных массивов происходит с линейной сложностью, сложность алгоритма - $\Theta(NlogN)$.
+        
+        Можно сократить число шагов и в какой-то момент, при небольших размерах подмассивов, использовать сортировку Шелла. Этот гибридный вариант сортировки будет реализован в этой работе.
+
+	\newpage
+
+	\section{Описание схемы распараллеливания.}
+	Можно распараллелить два этапа алгоритма:
+        \begin{itemize}
+		\item Сортировка Шелла на последнем шаге прямого хода гибридной сортировки
+            \item Объединение подмассивов во время обратного хода
+        \end{itemize}
+
+        На самом последнем шаге k подмассивов, каждый из которых будет отсортирован с помощью сортировки Шелла. Данный этап легко разделить на t процессов, каждому в определенном порядке будет передан свой массив для сортировки.
+
+        Этап объединения подмассивов тоже можно распараллелить. Имеется k подмассивов, которые объединятся в k/2 подмассивов. Таким образом k/2 
+        объединений будут разделены на t процессов.
+
+	\newpage
+
+	\section{Описание схемы MPI}
+
+        \textbf{Нулевой процесс:}
+        \begin{enumerate}
+        \item Находится первая степень двойки, превышающая число процессов - arrays\_to\_sort - число массивов, которые нужно отсортировать сортировкой Шелла. 
+        \item Высчитывается размер подмассива array\_size делением size на arrays\_to\_sort c округлением сверху.
+        \item Всем остальным процессам отсылается значение arrays\_to\_sort (исходный массив поступает только в нулевой процесс, потому arrays\_to\_sort знает только он, в остальных входной вектор пуст).
+        \item Если size не кратен num\_of\_arrays, то в последний массив при необходимости записываются максимально возможные float. В конце эти значения будут отброшены, на корректность данный этап не повлияет, зато слегка упростит написание кода.
+        \item Всем процессам отсылаются подмассивы для сортировки (цикл по i от 1 до arrays\_to\_sort, номер массива, которому будет отослан тот или иной подмассив высчитывается следующим образом: p\_rank = i mod pcount)
+        \item Сортируется нулевой подмассив
+        \item Принимаются отсортированные другими процессами подмассивы.
+        \item Пока arrays\_to\_sort не равно 1, уменьшить arrays\_to\_sort вдвое, увеличить array\_size вдвое, разослать подмассивы для слияния остальным процессам, провести слияние своих подмассивов, принять отсортированные подмассивы от других процессов.
+        \item Отбросить максимальные float, которые были записаны на 4 шаге.
+        \item Вернуть отсортированный массив.
+        \end{enumerate}
+
+        \textbf{Ненулевой процесс:}
+        \begin{enumerate}
+        \item Принять array\_size. 
+        \item Принять подмассив/подмассивы (число подмассивов и их индексы легко высчитываются из ранга и других данных) для сортировки Шелла.
+        \item Отослать отсортированные подмассивы.
+        \item Пока arrays\_to\_sort не равно 1, уменьшить arrays\_to\_sort вдвое, увеличить array\_size вдвое, принять подмассивы для слияния, отсортировать, отправить подмассивы для слияния.
+        \item Очистить память и вернуть пустой массив.
+        \end{enumerate}
+
+	\newpage
+
+	\section{Результаты экспериментов}
+	Входные данные равномерно распределены, сортировка отработала корректно на всех тестах.
+
+	\noindent\textbf{Время работы (в микросекундах, меньше - лучше):}\\\\
+\begin{tabular}{|c | c | c | c | c |} 
+	\hline
+	N & 1 процесс & 2 процесса & 3 процесса & 4 процесса\\
+	\hline
+	1000 & 107 & 58 & 68  & 47\\ 
+	\hline
+	10000 & 1398 & 751 & 770 & 478\\
+	\hline
+	100000 & 19664 & 10150  & 9433 & 5771\\
+	\hline
+	10000000 & 3397176 & 1685957  & 1614841 & 917784\\
+	\hline
+\end{tabular}
+
+	\newpage
+
+	\section{Вывод}
+        Очевидно, что все упирается в подбор значения size\_of\_array - размер массивов, которые сортируются с помощью Шелла. По сути при     работе в один процесс будет запущена сортировка Шелла на весь массив, оттого такой прирост при увеличении процессов вдвое (на 4 процессах тоже заметное улучшение). 
+
+        Данная реализация не претендует на максимальную эффективность, для ее достижения можно использовать другой подход, при котором size\_of\_array не зависит от числа процессов, а выбирается эмпирически, например, несколько сотен или тысяч. Исходя из этого числа подбирается число итераций в сортировке слияния. Я не отдавал предпочтение этому подходу, так как вычислительная нагрузка на один процесс зачастую слишком мала (в алгоритме очень мало вычислений, если сравнивать, например, с умножением матриц), оттого можно получить заметное замедление при использовании MPI.
+
+	\newpage
+
+	\section{Заключение}
+        Мне удалось реализовать корректную программу с использованием MPI и убедиться в том, что хот-спот расположен на этапе сортировки Шелла. Также я убедился, что алгоритмы, которые не несут в себе тяжелые вычисления могут очень сильно проигрывать по скорости в своей многопроцессорной/многопоточной реализации.
+
+        Помимо этих неочевидных выводов, я повторил для себя два алгоритма сортировки и немного ближе познакомился с реализацией MPI на C++
+
+	\newpage
+
+	\section{Литература}
+	\begin{enumerate}
+		\item Shell D. L. A high-speed sorting procedure //Communications of the ACM. – 1959. – Т. 2. – №. 7. – С. 30-32.
+	\end{enumerate}
+	\newpage
+
+	\section{Приложение}
+
+	\subsection{main.cpp}
+	\begin{lstlisting}
+// Copyright 2022 Krolevets Nikita
+#include <gtest/gtest.h>
+
+#include <chrono>
+#include <gtest-mpi-listener.hpp>
+
+#include "./shell_merge_sort.h"
+
+void test_body(uint32_t size) {
+  int32_t rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  std::vector<float> src;
+  std::chrono::steady_clock::time_point begin;
+  std::chrono::steady_clock::time_point end;
+  if (rank == 0) {
+    src = generate_array(size);
+    begin = std::chrono::steady_clock::now();
+  }
+  src = merge_sort_par(src);
+  end = std::chrono::steady_clock::now();
+  if (rank == 0) {
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(end -
+                                                                       begin)
+                     .count()
+              << std::endl;
+    EXPECT_TRUE(check(src));
+  }
+}
+
+TEST(solver_test_series, small_size) { test_body(1000); }
+
+TEST(solver_test_series, moderate_size) { test_body(10000); }
+
+TEST(solver_test_series, big_size) { test_body(100000); }
+
+TEST(solver_test_series,
+     i_dont_think_an_average_human_can_imagine_such_numbers) {
+  test_body(10000000);
+}
+
+TEST(solver_test_series, one_element) { test_body(1); }
+
+TEST(solver_test_series, two_elements) { test_body(2); }
+
+int main(int argc, char** argv) {
+  // Filter out Google Test arguments
+  ::testing::InitGoogleTest(&argc, argv);
+
+  // Initialize MPI
+  MPI_Init(&argc, &argv);
+
+  // Add object that will finalize MPI on exit; Google Test owns this pointer
+  ::testing::AddGlobalTestEnvironment(new GTestMPIListener::MPIEnvironment);
+
+  // Get the event listener list.
+  ::testing::TestEventListeners& listeners =
+      ::testing::UnitTest::GetInstance()->listeners();
+
+  // Remove default listener
+  delete listeners.Release(listeners.default_result_printer());
+
+  // Adds MPI listener; Google Test owns this pointer
+  listeners.Append(new GTestMPIListener::MPIMinimalistPrinter);
+
+  // Run tests, then clean up and exit. RUN_ALL_TESTS() returns 0 if all tests
+  // pass and 1 if some test fails.
+  return RUN_ALL_TESTS();
+}
+
+	\end{lstlisting}
+	\newpage
+	\subsection{shell\_merge\_sort.h}
+	\begin{lstlisting}
+// Copyright 2022 Krolevets Nikita
+#ifndef MODULES_TASK_3_KROLEVETS_N_SHELL_MERGE_SORT_SHELL_MERGE_SORT_H_
+#define MODULES_TASK_3_KROLEVETS_N_SHELL_MERGE_SORT_SHELL_MERGE_SORT_H_
+
+#include <mpi.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <random>
+#include <vector>
+
+uint64_t next_power_of_2(uint64_t);
+void shell_sort(float*, uint64_t);
+void merge(float*, uint64_t);
+std::vector<float> generate_array(uint64_t);
+std::vector<float> merge_sort_par(const std::vector<float>&);
+bool check(const std::vector<float>&);
+
+#endif  // MODULES_TASK_3_KROLEVETS_N_SHELL_MERGE_SORT_SHELL_MERGE_SORT_H_
+
+	\end{lstlisting}
+	\newpage
+	\subsection{shell\_merge\_sort.cpp}
+	\begin{lstlisting}
+// Copyright 2022 Krolevets Nikita
+#include "../../../modules/task_3/krolevets_n_shell_merge_sort/shell_merge_sort.h"
+
+uint64_t next_power_of_2(uint64_t n) {
+  n--;
+
+  n |= n >> 1;
+  n |= n >> 2;
+  n |= n >> 4;
+  n |= n >> 8;
+  n |= n >> 16;
+  n |= n >> 32;
+
+  return ++n;
+}
+
+std::vector<float> generate_array(uint64_t size) {
+  std::vector<float> res(size);
+  std::mt19937 gen(42);
+  std::uniform_real_distribution<> float_dist(-1000000.f, 1000000.f);
+  for (uint64_t i = 0; i < res.size(); ++i) {
+    res[i] = float_dist(gen);
+  }
+  return res;
+}
+
+void shell_sort(float* src, uint64_t size) {
+  for (uint64_t gap = size / 2; gap > 0; gap >>= 1) {
+    for (uint64_t i = gap; i < size; ++i) {
+      float temp = src[i];
+      uint64_t j;
+      for (j = i; j >= gap && src[j - gap] > temp; j -= gap) {
+        src[j] = src[j - gap];
+      }
+      src[j] = temp;
+    }
+  }
+}
+
+void merge(float* src, uint64_t size) {
+  float* res = new float[size];
+  uint64_t ind = 0;
+  uint64_t ind1 = 0;
+  uint64_t ind2 = size / 2;
+  while (ind1 < size / 2 && ind2 < size) {
+    if (src[ind1] <= src[ind2]) {
+      res[ind++] = src[ind1++];
+    } else {
+      res[ind++] = src[ind2++];
+    }
+  }
+  while (ind1 < size / 2) {
+    res[ind++] = src[ind1++];
+  }
+  while (ind2 < size) {
+    res[ind++] = src[ind2++];
+  }
+  std::memcpy(src, res, sizeof(float) * size);
+}
+
+bool check(const std::vector<float>& to_check) {
+  for (uint64_t i = 1; i < to_check.size(); ++i) {
+    if (to_check[i - 1] > to_check[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::vector<float> merge_sort_par(const std::vector<float>& src) {
+  int32_t rank, pcount;
+  MPI_Status status;
+
+  std::vector<float> local_vec = src;
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &pcount);
+
+  uint64_t arrays_to_sort = next_power_of_2(pcount);
+  uint64_t array_size =
+      (local_vec.size() + arrays_to_sort - 1) / arrays_to_sort;
+
+  if (rank == 0) {
+    MPI_Bcast(&array_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    uint64_t original_size = local_vec.size();
+    local_vec.resize(arrays_to_sort * array_size);
+    if (arrays_to_sort * array_size > original_size) {
+      std::fill(local_vec.begin() + original_size, local_vec.end(),
+                std::numeric_limits<float>::max());
+    }
+    for (uint64_t i = 1; i < arrays_to_sort; ++i) {
+      int32_t p_rank = i % pcount;
+      if (p_rank == 0) {
+        continue;
+      }
+      MPI_Send(local_vec.data() + array_size * i, array_size, MPI_FLOAT, p_rank,
+               0, MPI_COMM_WORLD);
+    }
+    for (uint64_t i = 0; i * pcount < arrays_to_sort; ++i) {
+      shell_sort(local_vec.data() + array_size * i * pcount, array_size);
+    }
+    for (uint64_t i = 1; i < arrays_to_sort; ++i) {
+      int32_t p_rank = i % pcount;
+      if (p_rank == 0) {
+        continue;
+      }
+      MPI_Recv(local_vec.data() + array_size * i, array_size, MPI_FLOAT, p_rank,
+               0, MPI_COMM_WORLD, &status);
+    }
+
+    while (arrays_to_sort != 1) {
+      arrays_to_sort >>= 1;
+      array_size <<= 1;
+      for (uint64_t i = 1; i < arrays_to_sort; ++i) {
+        uint64_t p_rank = i % pcount;
+        if (p_rank == 0) {
+          continue;
+        }
+        MPI_Send(local_vec.data() + array_size * i, array_size, MPI_FLOAT,
+                 p_rank, 0, MPI_COMM_WORLD);
+      }
+      for (uint64_t i = 0; i * pcount < arrays_to_sort; ++i) {
+        merge(local_vec.data() + array_size * i * pcount, array_size);
+      }
+      for (uint64_t i = 1; i < arrays_to_sort; ++i) {
+        uint64_t p_rank = i % pcount;
+        if (p_rank == 0) {
+          continue;
+        }
+        MPI_Recv(local_vec.data() + array_size * i, array_size, MPI_FLOAT,
+                 p_rank, 0, MPI_COMM_WORLD, &status);
+      }
+    }
+    local_vec.resize(original_size);
+    return local_vec;
+  } else {
+    MPI_Bcast(&array_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    uint64_t iterations =
+        arrays_to_sort / pcount +
+        (arrays_to_sort % (uint64_t)pcount > (uint64_t)rank ? 1 : 0);
+    auto calc_merge_iterations = [](uint64_t num_of_arrays,
+                                    uint64_t array_size) {
+      while (num_of_arrays != 1) {
+        array_size <<= 1;
+        num_of_arrays >>= 1;
+      }
+      return array_size;
+    };
+    uint64_t new_local_vec_size =
+        std::max(iterations * array_size,
+                 calc_merge_iterations(arrays_to_sort, array_size));
+    local_vec.resize(new_local_vec_size);
+    for (uint64_t i = 0; i < iterations; ++i) {
+      MPI_Recv(local_vec.data() + i * array_size, array_size, MPI_FLOAT, 0, 0,
+               MPI_COMM_WORLD, &status);
+      shell_sort(local_vec.data() + array_size * i, array_size);
+    }
+    for (uint64_t i = 0; i < iterations; ++i) {
+      MPI_Send(local_vec.data() + i * array_size, array_size, MPI_FLOAT, 0, 0,
+               MPI_COMM_WORLD);
+    }
+
+    while (arrays_to_sort != 1) {
+      arrays_to_sort >>= 1;
+      array_size <<= 1;
+      iterations = arrays_to_sort / pcount +
+                   (arrays_to_sort % (uint64_t)pcount > (uint64_t)rank ? 1 : 0);
+      for (uint64_t i = 0; i < iterations; ++i) {
+        MPI_Recv(local_vec.data() + i * array_size, array_size, MPI_FLOAT, 0, 0,
+                 MPI_COMM_WORLD, &status);
+      }
+      for (uint64_t i = 0; i * pcount < arrays_to_sort; ++i) {
+        merge(local_vec.data(), array_size);
+      }
+      for (uint64_t i = 0; i < iterations; ++i) {
+        MPI_Send(local_vec.data() + i * array_size, array_size, MPI_FLOAT, 0, 0,
+                 MPI_COMM_WORLD);
+      }
+    }
+    return std::vector<float>();
+  }
+}
+
+
+	\end{lstlisting}
+	\newpage
+
+\end{document}
